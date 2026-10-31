@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>代購與電商記帳助手</title>
+  <style>
+    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background-color: #f4f6f8; margin: 0; padding: 12px; color: #333; }
+    .container { max-width: 900px; margin: 0 auto; }
+    h1 { text-align: center; color: #2c3e50; font-size: 18px; margin-bottom: 12px; }
+    
+    .card { background: white; border-radius: 10px; padding: 12px; margin-bottom: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.05); }
+    .card-title { font-weight: bold; font-size: 15px; margin-bottom: 10px; color: #34495e; border-bottom: 2px solid #ecf0f1; padding-bottom: 6px; }
+    
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; }
+    .form-group { display: flex; flex-direction: column; }
+    label { font-size: 11px; color: #7f8c8d; margin-bottom: 3px; font-weight: 600; }
+    input, select { padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; outline: none; }
+    
+    .checkbox-group { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 12px; color: #34495e; }
+    .checkbox-group input { width: 15px; height: 15px; }
+
+    .btn { background: #3b82f6; color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer; margin-top: 10px; width: 100%; font-size: 14px; }
+    .btn-sync { background: #10b981; margin-top: 0; padding: 5px 8px; font-size: 11px; width: auto; }
+
+    .result-box { background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 6px; padding: 10px; margin-top: 10px; }
+    .result-row { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 12px; }
+    .result-row.total { font-weight: bold; font-size: 14px; border-top: 1px solid #e2e8f0; padding-top: 6px; color: #1e293b; }
+    .profit-text { color: #059669; }
+    
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    th, td { text-align: left; padding: 6px 3px; border-bottom: 1px solid #e2e8f0; font-size: 11px; }
+    th { background: #f1f5f9; color: #475569; }
+    .delete-btn { color: #ef4444; cursor: pointer; border: none; background: none; font-weight: bold; font-size: 11px; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h1>🛍️ 代購與電商記帳助手</h1>
+
+  <!-- 1. 匯率設定 -->
+  <div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center;" class="card-title">
+      <span>1. 匯率與手續費</span>
+      <button class="btn btn-sync" onclick="fetchRates()">🔄 更新匯率</button>
+    </div>
+    <div class="grid">
+      <div class="form-group">
+        <label>日幣匯率</label>
+        <input type="number" id="rateJPY" step="0.0001" value="0.2150" oninput="updateCalc()">
+      </div>
+      <div class="form-group">
+        <label>韓幣匯率</label>
+        <input type="number" id="rateKRW" step="0.0001" value="0.0240" oninput="updateCalc()">
+      </div>
+      <div class="form-group">
+        <label>刷卡手續費 (%)</label>
+        <input type="number" id="cardFee" step="0.1" value="1.5" oninput="updateCalc()">
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. 代購計算器 -->
+  <div class="card">
+    <div class="card-title">2. 代購訂單（計算實刷成本與營業稅）</div>
+    <div class="grid">
+      <div class="form-group">
+        <label>品名 / 備註</label>
+        <input type="text" id="itemName" placeholder="例如：周邊立牌">
+      </div>
+      <div class="form-group">
+        <label>幣別</label>
+        <select id="currency" onchange="updateCalc()">
+          <option value="JPY">日幣 (JPY)</option>
+          <option value="KRW">韓幣 (KRW)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>外幣原價</label>
+        <input type="number" id="foreignCost" value="1000" oninput="updateCalc()">
+      </div>
+      <div class="form-group">
+        <label>報價匯率</label>
+        <input type="number" id="quoteRate" step="0.0001" value="0.2500" oninput="updateCalc()">
+      </div>
+    </div>
+
+    <label class="checkbox-group">
+      <input type="checkbox" id="calcTax" checked onchange="updateCalc()">
+      <span>扣除台灣 5% 營業稅（從報價中計算 5% 稅額）</span>
+    </label>
+
+    <div class="result-box">
+      <div class="result-row">
+        <span>報給客人售價：</span>
+        <span id="calcCustomerPrice">NT$ 250</span>
+      </div>
+      <div class="result-row">
+        <span>實際刷卡成本 (含手續費)：</span>
+        <span id="calcActualCost">NT$ 218</span>
+      </div>
+      <div class="result-row">
+        <span>預估營業稅額 (5%)：</span>
+        <span id="calcTaxAmount" style="color: #d97706;">NT$ 12</span>
+      </div>
+      <div class="result-row total">
+        <span>此單預估淨利：</span>
+        <span id="calcNetProfit" class="profit-text">+ NT$ 20</span>
+      </div>
+    </div>
+
+    <button class="btn" onclick="addPurchaseRecord()">➕ 新增代購紀錄</button>
+  </div>
+
+  <!-- 3. 電商每日銷售 -->
+  <div class="card">
+    <div class="card-title">3. 每日電商銷售紀錄</div>
+    <div class="grid">
+      <div class="form-group">
+        <label>平台</label>
+        <select id="platform">
+          <option value="蝦皮">蝦皮購物</option>
+          <option value="賣貨便">7-11 賣貨便</option>
+          <option value="噗浪/私訊">噗浪 / 私訊</option>
+          <option value="其他">其他</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>當天銷售總額</label>
+        <input type="number" id="salesAmount" placeholder="例如：3500">
+      </div>
+      <div class="form-group">
+        <label>平台手續費</label>
+        <input type="number" id="platformFee" placeholder="例如：280" value="0">
+      </div>
+    </div>
+
+    <button class="btn" style="background: #eb5757;" onclick="addSalesRecord()">➕ 新增銷售紀錄</button>
+  </div>
+
+  <!-- 4. 明細 -->
+  <div class="card">
+    <div class="card-title">📊 今日紀錄統計</div>
+    <div id="summaryText" style="font-size: 12px; font-weight: bold; margin-bottom: 8px; color: #1e293b;">
+      代購淨利：NT$ 0 | 電商銷售額：NT$ 0
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>型態</th>
+          <th>明細</th>
+          <th>收入</th>
+          <th>成本/稅金</th>
+          <th>淨利</th>
+          <th>刪除</th>
+        </tr>
+      </thead>
+      <tbody id="recordTable"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  let records = JSON.parse(localStorage.getItem('proxy_app_records_v2') || '[]');
+
+  async function fetchRates() {
+    try {
+      const res = await fetch('https://open.er-api.com/v6/latest/TWD');
+      const data = await res.json();
+      if (data && data.rates) {
+        document.getElementById('rateJPY').value = (1 / data.rates.JPY).toFixed(4);
+        document.getElementById('rateKRW').value = (1 / data.rates.KRW).toFixed(4);
+        updateCalc();
+        alert('✅ 匯率更新成功！');
+      }
+    } catch (e) {
+      alert('⚠️ 匯率抓取失敗，請手動輸入。');
+    }
+  }
+
+  function updateCalc() {
+    const currency = document.getElementById('currency').value;
+    const foreignCost = parseFloat(document.getElementById('foreignCost').value) || 0;
+    const quoteRate = parseFloat(document.getElementById('quoteRate').value) || 0;
+    const cardFeePercent = parseFloat(document.getElementById('cardFee').value) || 0;
+    const bankRate = parseFloat(document.getElementById(currency === 'JPY' ? 'rateJPY' : 'rateKRW').value) || 0;
+    const isTaxChecked = document.getElementById('calcTax').checked;
+
+    const customerPrice = Math.round(foreignCost * quoteRate);
+    const actualCost = Math.round(foreignCost * bankRate * (1 + cardFeePercent / 100));
+    
+    // 計算 5% 營業稅（內含稅公式）
+    const tax = isTaxChecked ? Math.round(customerPrice - (customerPrice / 1.05)) : 0;
+    const netProfit = customerPrice - actualCost - tax;
+
+    document.getElementById('calcCustomerPrice').innerText = `NT$ ${customerPrice}`;
+    document.getElementById('calcActualCost').innerText = `NT$ ${actualCost}`;
+    document.getElementById('calcTaxAmount').innerText = `NT$ ${tax}`;
+    document.getElementById('calcNetProfit').innerText = `${netProfit >= 0 ? '+' : ''} NT$ ${netProfit}`;
+
+    return { customerPrice, actualCost, tax, netProfit };
+  }
+
+  function addPurchaseRecord() {
+    const name = document.getElementById('itemName').value || '代購商品';
+    const calc = updateCalc();
+    const isTaxChecked = document.getElementById('calcTax').checked;
+    
+    records.push({
+      id: Date.now(),
+      type: '代購',
+      detail: `${name}${isTaxChecked ? '(含5%稅)' : ''}`,
+      income: calc.customerPrice,
+      deduction: calc.actualCost + calc.tax,
+      profit: calc.netProfit
+    });
+
+    saveAndRender();
+  }
+
+  function addSalesRecord() {
+    const platform = document.getElementById('platform').value;
+    const amount = parseFloat(document.getElementById('salesAmount').value) || 0;
+    const fee = parseFloat(document.getElementById('platformFee').value) || 0;
+
+    if (amount <= 0) return alert('請輸入銷售金額');
+
+    let netSales = amount - fee;
+
+    records.push({
+      id: Date.now(),
+      type: '電商',
+      detail: platform,
+      income: amount,
+      deduction: fee,
+      profit: netSales
+    });
+
+    saveAndRender();
+    document.getElementById('salesAmount').value = '';
+  }
+
+  function deleteRecord(id) {
+    records = records.filter(r => r.id !== id);
+    saveAndRender();
+  }
+
+  function saveAndRender() {
+    localStorage.setItem('proxy_app_records_v2', JSON.stringify(records));
+    
+    const tbody = document.getElementById('recordTable');
+    tbody.innerHTML = '';
+
+    let totalProxyProfit = 0;
+    let totalSalesIncome = 0;
+
+    records.forEach(r => {
+      if (r.type === '代購') totalProxyProfit += r.profit;
+      if (r.type === '電商') totalSalesIncome += r.income;
+
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><b>${r.type}</b></td>
+        <td>${r.detail}</td>
+        <td>$${r.income}</td>
+        <td>$${r.deduction}</td>
+        <td style="color: ${r.profit >= 0 ? '#059669' : '#ef4444'}; font-weight: bold;">$${r.profit}</td>
+        <td><button class="delete-btn" onclick="deleteRecord(${r.id})">刪除</button></td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    document.getElementById('summaryText').innerText = 
+      `代購淨利：NT$ ${totalProxyProfit.toLocaleString()} | 電商銷售額：NT$ ${totalSalesIncome.toLocaleString()}`;
+  }
+
+  updateCalc();
+  saveAndRender();
+</script>
+
+</body>
+</html>
